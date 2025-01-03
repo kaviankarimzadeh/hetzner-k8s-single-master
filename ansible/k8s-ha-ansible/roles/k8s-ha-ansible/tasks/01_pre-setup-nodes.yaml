@@ -1,0 +1,279 @@
+- block:
+    - name: Disable swap
+      become: true
+      when: inventory_hostname in ((groups['master_servers'] + groups['worker_servers']) | unique )
+      block:
+        - name: Remove swapfile from /etc/fstab
+          ansible.builtin.mount:
+            name: "{{ item }}"
+            fstype: swap
+            state: absent
+          with_items:
+            - swap
+            - none
+          ignore_errors: true
+
+        - name: Disable swap from shell
+          ansible.builtin.shell: sudo swapoff -a
+          ignore_errors: true
+
+        - name: Disable swap
+          ansible.builtin.command: swapoff -a
+          when: ansible_swaptotal_mb > 0
+          ignore_errors: true
+
+    - name: modprobe configuration
+      become: true
+      when: inventory_hostname in ((groups['master_servers'] + groups['worker_servers']) | unique )
+      shell: |
+              sudo modprobe overlay
+              sudo modprobe br_netfilter
+
+    - name: Add config for k8s
+      become: true
+      when: inventory_hostname in ((groups['master_servers'] + groups['worker_servers']) | unique )
+      blockinfile:
+        path: /etc/sysctl.d/99-kubernetes-cri.conf
+        block: |
+              net.bridge.bridge-nf-call-iptables = 1
+              net.ipv4.ip_forward = 1
+              net.bridge.bridge-nf-call-ip6tables = 1
+        create: yes
+
+    - name: Force systemd to reload configs
+      become: true
+      when: inventory_hostname in ((groups['master_servers'] + groups['worker_servers']) | unique )
+      ansible.builtin.systemd:
+        daemon_reload: yes
+
+    - name: Upgrade all packages
+      become: true
+      when: inventory_hostname in ((groups['master_servers'] + groups['worker_servers']) | unique )
+      ansible.builtin.apt:
+        name: "*"
+        state: latest
+
+    - name: Install some packages
+      become: true
+      when: inventory_hostname in ((groups['master_servers'] + groups['worker_servers']) | unique )
+      ansible.builtin.apt:
+        name: "{{ packages }}"
+        state: present
+        update_cache: yes
+      vars:
+        packages:
+        - apt-transport-https
+        - ca-certificates
+        - gpg
+        - curl
+        - gnupg2
+        - socat
+        - conntrack
+        - ipset
+        - wget
+        - git
+        - unzip
+        - tar
+        - net-tools
+        - python3-pip
+        - iproute2
+        - psmisc
+        - keepalived={{ keepalived_version }}
+
+    - name: Creting keyrings directory
+      become: true
+      when: inventory_hostname in ((groups['master_servers'] + groups['worker_servers']) | unique )
+      file:
+        path: "/etc/apt/keyrings"
+        state: directory
+        mode: "0755"
+
+    - name: Download the public signing key for the Kubernetes package and add repository
+      when: inventory_hostname in ((groups['master_servers'] + groups['worker_servers']) | unique )
+      become: true
+      block:
+        - name: download gpg kubernetes
+          file:
+            path: "/etc/apt/keyrings/Release.key"
+            state: absent
+
+        - name: remove the old one if exists
+          ansible.builtin.get_url:
+            url: https://pkgs.k8s.io/core:/stable:/v{{ k8s_repo_version | string }}/deb/Release.key
+            dest: /etc/apt/keyrings/Release.key
+        
+        - name: dearmore the key
+          become: true
+          shell: rm -f /etc/apt/keyrings/kubernetes-apt-keyring.gpg; gpg -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg --dearmor /etc/apt/keyrings/Release.key
+
+        - name: add gpg kubernetes
+          ansible.builtin.apt_repository:
+            repo: "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v{{ k8s_repo_version | string }}/deb/ /"
+            filename: kubernetes
+            state: present
+
+    - name: Upgrade all packages
+      become: true
+      when: inventory_hostname in ((groups['master_servers'] + groups['worker_servers']) | unique )
+      ansible.builtin.apt:
+        name: "*"
+        state: latest
+
+    - name: Install kubelet, kubeadm, and kubectl packages
+      become: true
+      when: inventory_hostname in ((groups['master_servers'] + groups['worker_servers']) | unique )
+      ansible.builtin.apt:
+        name:
+          - kubelet={{ kubernetes_package_version }}
+          - kubeadm={{ kubernetes_package_version }}
+          - kubectl={{ kubernetes_package_version }}
+        state: present
+        update_cache: yes
+
+    - name: Add config for containerd
+      become: true
+      when: inventory_hostname in ((groups['master_servers'] + groups['worker_servers']) | unique )
+      blockinfile:
+        path: /etc/modules-load.d/containerd.conf
+        block: |
+              overlay
+              br_netfilter
+        create: yes
+
+    - name: Apply added settings via sysctl
+      become: true
+      when: inventory_hostname in ((groups['master_servers'] + groups['worker_servers']) | unique )
+      command: sudo sysctl --system
+
+    - name: Install containerd package
+      become: true
+      when: inventory_hostname in ((groups['master_servers'] + groups['worker_servers']) | unique )
+      ansible.builtin.apt:
+        state: present
+        name: 
+          - containerd={{ containerd_version }}
+
+    - name: initiate a default containerd config
+      become: true
+      when: inventory_hostname in ((groups['master_servers'] + groups['worker_servers']) | unique )
+      ansible.builtin.shell: mkdir /etc/containerd; containerd config default > /etc/containerd/config.toml
+      ignore_errors: true
+
+    - name: Modify SystemdCgroup setting
+      when: inventory_hostname in ((groups['master_servers'] + groups['worker_servers']) | unique )
+      become: true
+      ansible.builtin.lineinfile:
+        path: /etc/containerd/config.toml
+        regexp: '^(\s*)SystemdCgroup\s*=\s*false'
+        line: '            SystemdCgroup = true'
+
+    - name: Modify pause image tag
+      when: inventory_hostname in ((groups['master_servers'] + groups['worker_servers']) | unique )
+      become: true
+      ansible.builtin.replace:
+        path: /etc/containerd/config.toml
+        regexp: 'pause:\d+\.\d+'
+        replace: 'pause:3.9'
+
+    - name: Add KUBELET_EXTRA_ARGS to kubelet config - Get server IP
+      become: true
+      when: inventory_hostname in ((groups['master_servers'] + groups['worker_servers']) | unique )
+      set_fact:
+        server_ip: "{{ hostvars[inventory_hostname]['ansible_default_ipv4']['address'] }}"
+      delegate_to: localhost
+
+    - name: Add KUBELET_EXTRA_ARGS to kubelet config
+      become: true
+      when: inventory_hostname in ((groups['master_servers'] + groups['worker_servers']) | unique )
+      ansible.builtin.lineinfile:
+        path: /etc/sysconfig/kubelet
+        mode: "0644"
+        line: "KUBELET_EXTRA_ARGS=--node-ip={{ server_ip }}"
+        create: yes
+
+    - name: Just force systemd to reload configs
+      become: true
+      when: inventory_hostname in ((groups['master_servers'] + groups['worker_servers']) | unique )
+      ansible.builtin.systemd:
+        daemon_reload: yes
+
+    - name: Start containerd/kubelet service
+      become: true
+      when: inventory_hostname in ((groups['master_servers'] + groups['worker_servers']) | unique )
+      service:
+        name: "{{item}}"
+        enabled: true
+        state: restarted
+      ignore_errors: true
+      with_items:
+        - containerd
+        - kubelet
+
+    - name: Copying keepalived conf to worker01
+      become: true
+      when: inventory_hostname == groups['worker_servers'][0]
+      template:
+        src: keepalivedw1.j2
+        dest: /etc/keepalived/keepalived.conf
+        mode: "0644"
+
+    - name: Copying keepalived conf to worker02
+      become: true
+      when: inventory_hostname == groups['worker_servers'][1]
+      template:
+        src: keepalivedw2.j2
+        dest: /etc/keepalived/keepalived.conf
+        mode: "0644"
+
+    - name: Copying keepalived conf to worker03
+      become: true
+      when: inventory_hostname == groups['worker_servers'][2]
+      template:
+        src: keepalivedw3.j2
+        dest: /etc/keepalived/keepalived.conf
+        mode: "0644"
+
+    - name: Copying keepalived conf to worker04
+      become: true
+      when: inventory_hostname == groups['worker_servers'][3]
+      template:
+        src: keepalivedw4.j2
+        dest: /etc/keepalived/keepalived.conf
+        mode: "0644"
+
+    - name: Copying keepalived conf to worker05
+      become: true
+      when: inventory_hostname == groups['worker_servers'][4]
+      template:
+        src: keepalivedw5.j2
+        dest: /etc/keepalived/keepalived.conf
+        mode: "0644"
+
+    - name: Copying keepalived conf to worker06
+      become: true
+      when: inventory_hostname == groups['worker_servers'][5]
+      template:
+        src: keepalivedw6.j2
+        dest: /etc/keepalived/keepalived.conf
+        mode: "0644"
+
+    - name: Force systemd to reload configs
+      become: true
+      when: inventory_hostname in ((groups['master_servers'] + groups['worker_servers']) | unique )
+      ansible.builtin.systemd:
+        daemon_reload: yes
+
+    - name: Restart and enable keepalived on all nodes
+      become: true
+      when: inventory_hostname in groups['worker_servers']
+      service:
+        name: keepalived
+        enabled: true
+        state: restarted
+
+    - name: Prevent kubectl, kubelet, kubeadm, cri-tools, kubernetes-cni, and containerd.io from being updated
+      become: true
+      when: inventory_hostname in ((groups['master_servers'] + groups['worker_servers']) | unique )
+      ansible.builtin.shell:
+        cmd: >
+          apt-mark hold kubectl kubelet kubeadm cri-tools kubernetes-cni containerd

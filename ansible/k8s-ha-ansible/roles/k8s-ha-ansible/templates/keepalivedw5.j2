@@ -1,0 +1,42 @@
+global_defs {
+  notification_email {
+  }
+  router_id LVS_DEVEL
+  vrrp_skip_check_adv_addr
+  vrrp_garp_interval 0
+  vrrp_gna_interval 0
+}
+   
+vrrp_script chk_nginx {
+  script "crictl -r unix:///var/run/containerd/containerd.sock ps | grep ingress-nginx"
+  interval 2
+  weight 2
+}
+   
+vrrp_instance nginx-vip {
+  state BACKUP
+  priority 100
+  interface {{eth_name}} # Network card
+  virtual_router_id 60
+  advert_int 1
+  authentication {
+    auth_type PASS
+    auth_pass 9876
+  }
+  unicast_src_ip {{ hostvars[groups['worker_servers'][4]].ansible_host }}            # The IP address of this machine
+  unicast_peer {
+    {{ hostvars[groups['worker_servers'][1]].ansible_host }}                         # The IP address of peer machines
+    {{ hostvars[groups['worker_servers'][0]].ansible_host }}                         # The IP address of peer machines
+    {{ hostvars[groups['worker_servers'][2]].ansible_host }}                         # The IP address of peer machines
+    {{ hostvars[groups['worker_servers'][3]].ansible_host }}                         # The IP address of peer machines
+    {{ hostvars[groups['worker_servers'][5]].ansible_host }} 
+  }
+   
+  virtual_ipaddress {
+    {{VIP_WORKERS}} # The VIP address
+  }
+   
+  track_script {
+    chk_nginx                           # script
+  }
+}
