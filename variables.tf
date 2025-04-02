@@ -45,15 +45,15 @@ variable "pod_subnet" {
 }
 
 variable "kubernetes_version" {
-  default = "1.31.1"
+  default = "1.32.2"
 }
 
 variable "kubernetes_package_version" {
-  default = "1.31.2-1.1"
+  default = "1.32.2-1.1"
 }
 
 variable "k8s_repo_version" {
-  default = "1.31"
+  default = "1.32"
 }
 
 variable "helm_version" {
@@ -61,7 +61,7 @@ variable "helm_version" {
 }
 
 variable "containerd_version" {
-  default = "1.7.19+really1.7.12-0ubuntu4.2"
+  default = "1.7.24-0ubuntu1~24.04.2"
 }
 
 variable "keepalived_version" {
