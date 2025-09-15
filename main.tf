@@ -16,7 +16,7 @@ resource "hcloud_network_subnet" "hc_private_subnet" {
 
 resource "hcloud_ssh_key" "mykey" {
   name       = "hetzner_key"
-  public_key = file("~/.ssh/id_ed25519.pub")
+  public_key = file("~/.ssh/id_rsa.pub")
 }
 
 ## Creating servers
