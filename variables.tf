@@ -13,11 +13,11 @@ variable "master_server_type" {
 }
 
 variable "worker_server_type" {
-  default = "cx32"
+  default = "cx22"
 }
 
 variable "location" {
-  default = "nbg1"
+  default = "hel1"
 }
 
 variable "worker_instances" {
