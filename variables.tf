@@ -45,19 +45,19 @@ variable "pod_subnet" {
 }
 
 variable "kubernetes_version" {
-  default = "1.32.2"
+  default = "1.34.1"
 }
 
 variable "kubernetes_package_version" {
-  default = "1.32.2-1.1"
+  default = "1.34.1-1.1"
 }
 
 variable "k8s_repo_version" {
-  default = "1.32"
+  default = "1.34"
 }
 
 variable "helm_version" {
-  default = "3.16.4"
+  default = "3.19.0"
 }
 
 variable "containerd_version" {
@@ -69,11 +69,11 @@ variable "keepalived_version" {
 }
 
 variable "cilium_version" {
-  default = "1.16.5"
+  default = "1.18.1"
 }
 
 variable "ingress_nginx_version" {
-  default = "4.12.0"
+  default = "4.13.2"
 }
 
 variable "eth_name" {
