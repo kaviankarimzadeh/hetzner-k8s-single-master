@@ -141,24 +141,24 @@ resource "hcloud_load_balancer_network" "workers_network" {
   ]
 }
 
-## To add an extra Volume to Worker node for rook ceph
-resource "hcloud_volume" "worker_volume" {
-  count = var.worker_instances
+# ## To add an extra Volume to Worker node for rook ceph
+# resource "hcloud_volume" "worker_volume" {
+#   count = var.worker_instances
 
-  name     = "worker-volume-${count.index + 1}"
-  size     = 10
-  location = var.location
-  format   = "ext4"
-  labels = {
-    type = "worker_volume"
-  }
-  depends_on = [hcloud_server.kube_worker]
-}
+#   name     = "worker-volume-${count.index + 1}"
+#   size     = 10
+#   location = var.location
+#   format   = "ext4"
+#   labels = {
+#     type = "worker_volume"
+#   }
+#   depends_on = [hcloud_server.kube_worker]
+# }
 
-## Attach the volumes to the worker servers
-resource "hcloud_volume_attachment" "worker_volume_attachment" {
-  count = var.worker_instances
+# ## Attach the volumes to the worker servers
+# resource "hcloud_volume_attachment" "worker_volume_attachment" {
+#   count = var.worker_instances
 
-  server_id = hcloud_server.kube_worker[count.index].id
-  volume_id = hcloud_volume.worker_volume[count.index].id
-}
+#   server_id = hcloud_server.kube_worker[count.index].id
+#   volume_id = hcloud_volume.worker_volume[count.index].id
+# }
