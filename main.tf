@@ -102,6 +102,7 @@ resource "hcloud_load_balancer_service" "workers_service_1" {
     port     = var.services_workers_port_1
     interval = "10"
     timeout  = "10"
+    retries = 3
     http {
       path         = "/"
       status_codes = ["2??", "3??"]
@@ -121,6 +122,7 @@ resource "hcloud_load_balancer_service" "workers_service_2" {
     port     = var.services_workers_port_2
     interval = "10"
     timeout  = "10"
+    retries = 3
     http {
       path         = "/"
       status_codes = ["2??", "3??"]
