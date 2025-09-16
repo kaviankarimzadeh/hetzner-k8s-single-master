@@ -9,11 +9,11 @@ variable "os_type" {
 }
 
 variable "master_server_type" {
-  default = "cpx11"
+  default = "cx22"
 }
 
 variable "worker_server_type" {
-  default = "cpx11"
+  default = "cx22"
 }
 
 variable "location" {
