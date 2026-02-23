@@ -1,7 +1,6 @@
 ---
 -  hosts: all_servers
    become: false
-   strategy: free
    roles:
      - role: k8s-ha-ansible
        vars: 

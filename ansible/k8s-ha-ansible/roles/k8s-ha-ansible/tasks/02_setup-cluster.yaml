@@ -11,17 +11,29 @@
       when: inventory_hostname == groups['master_servers'][0]
       ansible.builtin.shell: sudo kubeadm init --upload-certs --config=/opt/config.yaml
       register: output
+      failed_when: output.rc != 0
 
-    - name: Saving token info
+    - name: Extract worker join command
+      when: inventory_hostname == groups['master_servers'][0]
+      set_fact:
+        worker_join_command: "{{ output.stdout | regex_search('kubeadm join [^\\n]*\\n[^\\n]*--discovery-token-ca-cert-hash[^\\n]*') | regex_replace('\\\\\\s*\\n\\s*', ' ') | regex_replace('\\\\\\s*$', '') }}"
+
+    - name: Save worker join command
+      when: 
+        - inventory_hostname == groups['master_servers'][0]
+        - worker_join_command is defined 
+        - worker_join_command != ""
+      delegate_to: localhost
+      copy:
+        content: "{{ worker_join_command }}"
+        dest: "/tmp/workertoken"
+
+    - name: Saving full kubeadm output (for debugging)
       when: inventory_hostname == groups['master_servers'][0]
       delegate_to: localhost
       copy:
         content: "{{ output.stdout }}"
         dest: "/tmp/token"
-      ignore_errors: true
-
-    - name: Generating token worker
-      local_action: shell sed -n 86,87p /tmp/token > /tmp/workertoken
 
     - name: Creting kubeconfig directory
       become: true
