@@ -2,7 +2,7 @@
 users:
   - name: itman
     gecos: Ansible User
-    groups: users,admin,wheel
+    groups: users,sudo
     sudo: ALL=(ALL) NOPASSWD:ALL
     shell: /bin/bash
     lock_passwd: true
